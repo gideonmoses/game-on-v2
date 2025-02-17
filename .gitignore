@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Postman
+postman/environments/*.local.json
+postman/environments/*.dev.json
+postman/environments/*.prod.json

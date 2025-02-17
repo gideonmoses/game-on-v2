@@ -1,0 +1,226 @@
+{
+  "info": {
+    "name": "Game-On Auth Flow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Register (Optional)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    console.log('Registration successful');",
+              "    postman.setNextRequest('1. Login');",
+              "} else {",
+              "    console.log('Registration failed:', pm.response.json());",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/register",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"email\": \"{{testUserEmail}}\",\n    \"password\": \"{{testUserPassword}}\",\n    \"phone\": \"9876543210\",\n    \"jerseyNumber\": 7,\n    \"dateOfBirth\": \"1990-01-01\"\n}"
+        }
+      }
+    },
+    {
+      "name": "1. Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const jsonData = pm.response.json();",
+              "    if (jsonData.token) {",
+              "        pm.environment.set('idToken', jsonData.token);",
+              "        pm.environment.set('userId', jsonData.user.uid);",
+              "        postman.setNextRequest('2. Create Session');",
+              "    }",
+              "} else if (pm.response.code === 403) {",
+              "    console.log('User not approved yet');",
+              "    postman.setNextRequest(null);",
+              "} else {",
+              "    console.log('Login failed:', pm.response.json());",
+              "    postman.setNextRequest(null);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"email\": \"{{testUserEmail}}\",\n    \"password\": \"{{testUserPassword}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "2. Create Session",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const cookieHeader = pm.response.headers.get('Set-Cookie');",
+              "    if (cookieHeader) {",
+              "        const sessionCookie = cookieHeader.split(';')[0].split('=')[1];",
+              "        pm.environment.set('sessionCookie', sessionCookie);",
+              "        const jsonData = pm.response.json();",
+              "        if (jsonData.user) {",
+              "            pm.environment.set('userData', JSON.stringify(jsonData.user));",
+              "        }",
+              "        postman.setNextRequest('3. Verify Session');",
+              "    }",
+              "} else if (pm.response.code === 403) {",
+              "    console.log('User not approved');",
+              "    postman.setNextRequest(null);",
+              "} else {",
+              "    console.log('Session creation failed:', pm.response.json());",
+              "    postman.setNextRequest(null);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/session",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"token\": \"{{idToken}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "3. Verify Session",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Session should be valid', function() {",
+              "    pm.expect(pm.response.code).to.equal(200);",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.valid).to.be.true;",
+              "    pm.expect(jsonData.user.uid).to.equal(pm.environment.get('userId'));",
+              "});",
+              "",
+              "postman.setNextRequest('4. Logout');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "session={{sessionCookie}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/verify",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sessionCookie\": \"{{sessionCookie}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "4. Logout",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    pm.environment.unset('sessionCookie');",
+              "    pm.environment.unset('idToken');",
+              "    pm.environment.unset('userId');",
+              "    pm.environment.unset('userData');",
+              "    postman.setNextRequest('5. Verify After Logout');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/auth/session",
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "session={{sessionCookie}}"
+          }
+        ]
+      }
+    },
+    {
+      "name": "5. Verify After Logout",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Session should be invalid after logout', function() {",
+              "    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.valid).to.be.false;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "session={{sessionCookie}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/verify",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sessionCookie\": \"{{sessionCookie}}\"\n}"
+        }
+      }
+    }
+  ]
+} 
