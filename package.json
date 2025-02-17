@@ -6,7 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "postman:import": "postman import -w ./postman/workspace.json",
+    "postman:export": "postman export -w ./postman/workspace.json",
+    "test:api": "node postman/scripts/run-tests.js",
+    "test:api:ci": "newman run postman/collections/user-management.json -e postman/environments/local.json"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.0",
@@ -30,6 +37,24 @@
     "eslint-config-next": "^15.1.7",
     "postcss": "^8.5.2",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "@jest/globals": "^29.7.0",
+    "@testing-library/jest-dom": "^6.4.2",
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "jest-environment-node": "^29.7.0",
+    "node-mocks-http": "^1.14.1",
+    "ts-jest": "^29.1.2",
+    "newman": "^5.3.2",
+    "postman-cli": "^0.5.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFilesAfterEnv": [
+      "<rootDir>/__tests__/setup/jest.setup.ts"
+    ],
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/src/$1"
+    }
   }
 }

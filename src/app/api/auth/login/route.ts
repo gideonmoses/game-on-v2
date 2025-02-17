@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase/firebase-admin';
+import { auth } from '@/lib/firebase/firebase-admin';
+import { signInWithEmailAndPassword, getAuth } from 'firebase/auth';
+import { initializeApp } from 'firebase/app';
+import { firebaseConfig } from '@/lib/firebase/firebase-config';
+
+// Initialize Firebase client
+const app = initializeApp(firebaseConfig);
+const clientAuth = getAuth(app);
 
 export async function POST(request: Request) {
   try {
@@ -7,70 +14,48 @@ export async function POST(request: Request) {
 
     if (!email || !password) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Email and password are required' },
         { status: 400 }
       );
     }
 
-    // Use Firebase Auth REST API for email/password sign-in
-    const signInUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`;
-    
-    const response = await fetch(signInUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    try {
+      // Authenticate with Firebase
+      const userCredential = await signInWithEmailAndPassword(
+        clientAuth,
         email,
-        password,
-        returnSecureToken: true,
-      }),
-    });
+        password
+      );
 
-    const data = await response.json();
+      // Get the ID token
+      const idToken = await userCredential.user.getIdToken();
 
-    if (!response.ok) {
-      console.warn(`[Auth] Login failed for email: ${email}, error: ${data?.error?.message}`);
+      // Get user data from Firebase Admin
+      const userRecord = await auth.getUser(userCredential.user.uid);
+
+      return NextResponse.json({
+        idToken,
+        user: {
+          uid: userRecord.uid,
+          email: userRecord.email,
+          roles: userRecord.customClaims?.roles || ['player'],
+          emailVerified: userRecord.emailVerified
+        }
+      });
+
+    } catch (authError) {
+      console.error('Login error:', authError);
       return NextResponse.json(
-        { error: data?.error?.message || 'Authentication failed' },
+        { error: 'Invalid credentials' },
         { status: 401 }
       );
     }
 
-    // Check user's approval status in Firestore
-    const userDoc = await db.collection('users').doc(data.localId).get();
-    const userData = userDoc.data();
-
-    if (!userData) {
-      console.warn(`[Auth] User data not found for uid: ${data.localId}`);
-      return NextResponse.json(
-        { error: 'User account not found' },
-        { status: 404 }
-      );
-    }
-
-    if (userData.approvalStatus !== 'approved') {
-      console.warn(`[Auth] Login attempt by unapproved user: ${data.localId}, status: ${userData.approvalStatus}`);
-      return NextResponse.json(
-        { error: 'Account pending approval' },
-        { status: 403 }
-      );
-    }
-
-    // Return the ID token for session creation
-    return NextResponse.json({ 
-      token: data.idToken,
-      user: {
-        uid: data.localId,
-        email: data.email,
-        approvalStatus: userData.approvalStatus,
-        roles: userData.roles || ['player'],
-      }
-    });
-
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Login request error:', error);
     return NextResponse.json(
-      { error: 'Authentication failed' },
-      { status: 401 }
+      { error: 'Invalid request' },
+      { status: 400 }
     );
   }
 } 

@@ -1,36 +1,118 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Game-On API
 
-## Getting Started
+A Next.js API with Firebase authentication and session management for a sports team management system.
 
-First, run the development server:
+## Features
 
+### Authentication
+- Firebase Authentication
+- Session Management
+- Role-based Access Control
+- Protected Routes
+
+### User Management
+- User Registration with Approval Flow
+- Admin User Management
+- User Profile Management
+- Role Management
+
+## Setup
+
+1. Install dependencies:
+```bash
+npm install
+# or
+yarn install
+```
+
+2. Set up environment variables:
+```bash
+cp .env.example .env.local
+```
+
+Required environment variables:
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+FIREBASE_ADMIN_PROJECT_ID=
+FIREBASE_ADMIN_CLIENT_EMAIL=
+FIREBASE_ADMIN_PRIVATE_KEY=
+```
+
+3. Configure Firebase:
+- Set up Firebase project
+- Enable Email/Password authentication
+- Set up Firestore with proper rules
+- Add service account credentials
+
+4. Run the development server:
 ```bash
 npm run dev
 # or
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## API Routes
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Authentication
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/login` - User login
+- `POST /api/auth/session` - Session management
+- `POST /api/auth/verify` - Session verification
+- `DELETE /api/auth/session` - Logout
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### User Management
+- `GET /api/users` - List users (Admin only)
+- `GET /api/users/:id` - Get user details
+- `PUT /api/users/:id/approve` - Approve user (Admin only)
+- `PUT /api/users/:id/roles` - Update user roles (Admin only)
+- `PUT /api/users/:id` - Update user profile
 
-## Learn More
+## Testing
 
-To learn more about Next.js, take a look at the following resources:
+The project includes Postman collections for API testing:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Auth Flow Collection
+   - Registration
+   - Login
+   - Session Management
+   - Logout
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+2. User Management Collection
+   - User Listing
+   - User Approval
+   - Role Management
 
-## Deploy on Vercel
+Import collections from the `postman` directory and set up environment variables.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Documentation
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- API documentation in `postman` directory
+- Route configuration in `src/config/routes.ts`
+- Middleware configuration in `src/middleware.ts`
+
+## Development
+
+### Protected Routes
+Routes are protected using the middleware system. Configure route protection in `src/config/routes.ts`:
+
+```typescript
+export const routes = {
+  auth: {
+    // Authentication routes
+  },
+  admin: {
+    // Admin-only routes
+  },
+  user: {
+    // User routes with role-based access
+  }
+};
+```
+
+### Role-Based Access
+The system supports role-based access control:
+- `admin` - Full system access
+- `manager` - Team management access
+- `player` - Basic user access

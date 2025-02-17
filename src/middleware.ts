@@ -2,39 +2,54 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { isPublicRoute, getRouteProtection } from '@/config/routes';
 
-export async function middleware(request: NextRequest) {
-  const { pathname } = new URL(request.url);
+// Paths that don't require authentication
+const PUBLIC_PATHS = [
+  '/api/auth/login',
+  '/api/auth/firebase-login',
+  '/api/auth/session',
+  '/api/auth/verify'
+];
 
-  // Skip middleware for public routes
-  if (isPublicRoute(pathname)) {
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Skip auth check for public paths
+  if (PUBLIC_PATHS.some(path => pathname.startsWith(path))) {
     return NextResponse.next();
   }
 
+  // Get session cookie
   const sessionCookie = request.cookies.get('session')?.value;
 
   if (!sessionCookie) {
-    console.warn(`[Unauthorized] No session cookie - Path: ${pathname}, IP: ${request.ip}, User-Agent: ${request.headers.get('user-agent')}`);
     return NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401 }
     );
   }
 
-  // Verify session using our API route
+  // Verify session
   const verifyResponse = await fetch(`${request.nextUrl.origin}/api/auth/verify`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ sessionCookie }),
+    body: JSON.stringify({ sessionCookie })
   });
+
+  if (!verifyResponse.ok) {
+    return NextResponse.json(
+      { error: 'Invalid session' },
+      { status: 401 }
+    );
+  }
 
   const { valid, user, error } = await verifyResponse.json();
 
   if (!valid) {
     console.warn(`[Unauthorized] Invalid session - Path: ${pathname}, Error: ${error}, IP: ${request.ip}`);
     return NextResponse.json(
-      { error: error || 'Unauthorized' },
+      { error: 'Invalid session' },
       { status: 401 }
     );
   }
@@ -63,12 +78,13 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Add user info to headers
+  // Clone the request headers and add the user info
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-user-id', user.uid);
   requestHeaders.set('x-user-roles', JSON.stringify(user.roles));
+  requestHeaders.set('x-user-email', user.email);
 
-  // Return modified request
+  // Return response with modified headers
   return NextResponse.next({
     request: {
       headers: requestHeaders,
@@ -78,8 +94,5 @@ export async function middleware(request: NextRequest) {
 
 // Configure which routes use this middleware
 export const config = {
-  matcher: [
-    '/api/:path*',
-    '/((?!_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: '/api/:path*',
 }; 

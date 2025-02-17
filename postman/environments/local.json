@@ -30,6 +30,54 @@
       "value": "Admin123!",
       "type": "secret",
       "enabled": true
+    },
+    {
+      "key": "idToken",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "adminIdToken",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "uid",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "adminUid",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "sessionCookie",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "adminSessionCookie",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "tokenExpiry",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "adminTokenExpiry",
+      "value": "",
+      "type": "default",
+      "enabled": true
     }
   ]
 } 

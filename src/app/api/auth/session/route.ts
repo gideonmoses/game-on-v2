@@ -2,77 +2,73 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { auth } from '@/lib/firebase/firebase-admin';
 import { db } from '@/lib/firebase/firebase-admin';
+import { cookies } from 'next/headers';
 
 /**
  * Session Management API
  * Public routes for handling session cookies
  */
-export async function POST(request: NextRequest) {
+
+// Session duration: 5 days
+const SESSION_DURATION = 60 * 60 * 24 * 5 * 1000;
+
+export async function POST(request: Request) {
   try {
-    const { token } = await request.json();
+    const { idToken } = await request.json();
 
-    // Verify the ID token first
+    if (!idToken) {
+      return NextResponse.json(
+        { error: 'No ID token provided' },
+        { status: 400 }
+      );
+    }
+
     try {
-      const decodedToken = await auth.verifyIdToken(token);
-      
-      // Check user's approval status in Firestore
-      const userDoc = await db.collection('users').doc(decodedToken.uid).get();
-      const userData = userDoc.data();
-
-      if (!userData) {
-        console.warn(`[Session] User data not found for uid: ${decodedToken.uid}`);
-        return NextResponse.json(
-          { error: 'User account not found' },
-          { status: 404 }
-        );
-      }
-
-      if (userData.approvalStatus !== 'approved') {
-        console.warn(`[Session] Session creation attempt by unapproved user: ${decodedToken.uid}, status: ${userData.approvalStatus}`);
-        return NextResponse.json(
-          { error: 'Account pending approval' },
-          { status: 403 }
-        );
-      }
+      // Verify the ID token
+      const decodedToken = await auth.verifyIdToken(idToken);
 
       // Create session cookie
-      const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 days
-      const sessionCookie = await auth.createSessionCookie(token, { expiresIn });
+      const sessionCookie = await auth.createSessionCookie(idToken, {
+        expiresIn: SESSION_DURATION
+      });
 
-      // Create response with session cookie
-      const response = NextResponse.json({ 
+      // Set cookie options
+      const options = {
+        name: 'session',
+        value: sessionCookie,
+        maxAge: SESSION_DURATION,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        sameSite: 'lax' as const
+      };
+
+      // Set the cookie
+      cookies().set(options);
+
+      return NextResponse.json({
         status: 'success',
         user: {
           uid: decodedToken.uid,
           email: decodedToken.email,
-          approvalStatus: userData.approvalStatus,
-          roles: userData.roles || ['player'],
+          roles: decodedToken.roles || ['player'],
+          emailVerified: decodedToken.email_verified
         }
       });
 
-      // Set cookie in response
-      response.cookies.set('session', sessionCookie, {
-        maxAge: expiresIn / 1000, // Convert to seconds
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        path: '/',
-      });
-
-      return response;
-
-    } catch (tokenError) {
-      console.warn('[Session] Token verification failed:', tokenError);
+    } catch (error) {
+      console.error('Session creation error:', error);
       return NextResponse.json(
-        { error: 'Invalid or expired token' },
+        { error: 'Invalid ID token' },
         { status: 401 }
       );
     }
 
   } catch (error) {
-    console.error('Session creation error:', error);
+    console.error('Session error:', error);
     return NextResponse.json(
-      { error: 'Failed to create session' },
-      { status: 500 }
+      { error: 'Invalid request' },
+      { status: 400 }
     );
   }
 }

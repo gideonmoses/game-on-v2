@@ -1,78 +1,88 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebase/firebase-admin';
-import { adminAuthMiddleware } from '@/lib/middleware/adminAuth';
+import { NextResponse } from 'next/server';
+import type { AuthenticatedRequest } from '@/types/auth';
+import { UserService } from '@/lib/services/UserService';
+import { playerOrAdmin } from '@/lib/middleware/auth/roleAccess';
+import { withValidation } from '@/lib/middleware/validation/schemas';
+import { z } from 'zod';
 
-export async function GET(request: NextRequest) {
+// Query parameters validation schema
+const listQuerySchema = z.object({
+  pageSize: z.string().regex(/^\d+$/).transform(Number).default('10'),
+  pageToken: z.string().optional(),
+  status: z.enum(['pending', 'approved', 'rejected']).optional(),
+  role: z.enum(['admin', 'player', 'manager']).optional()
+});
+
+type ListQueryParams = z.infer<typeof listQuerySchema>;
+
+async function listHandler(
+  request: AuthenticatedRequest,
+  query: ListQueryParams
+) {
   try {
-    // Check admin authorization
-    const authResponse = await adminAuthMiddleware();
-    if (authResponse) return authResponse;
-
-    // Get query parameters
+    const { user } = request;
     const { searchParams } = new URL(request.url);
-    const role = searchParams.get('role');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const page = parseInt(searchParams.get('page') || '1');
-    const sortBy = searchParams.get('sortBy') || 'displayName';
-    const order = searchParams.get('order') || 'asc';
+    
+    // Build query parameters
+    const queryParams = {
+      pageSize: parseInt(searchParams.get('pageSize') || '10'),
+      pageToken: searchParams.get('pageToken') || undefined,
+      status: searchParams.get('status') as ListQueryParams['status'],
+      role: searchParams.get('role') as ListQueryParams['role']
+    };
 
-    // Build query
-    let query = db.collection('users');
+    // Validate query parameters
+    const validatedQuery = listQuerySchema.parse(queryParams);
 
-    // Apply role filter if specified
-    if (role) {
-      query = query.where('roles', 'array-contains', role);
+    // Build base query
+    let query = {
+      pageSize: validatedQuery.pageSize,
+      filters: {} as Record<string, unknown>
+    };
+
+    // If not admin, only show approved users
+    if (!user.roles.includes('admin')) {
+      query.filters.approvalStatus = 'approved';
+    } else if (validatedQuery.status) {
+      query.filters.approvalStatus = validatedQuery.status;
     }
 
-    // Apply sorting
-    query = query.orderBy(sortBy, order as 'asc' | 'desc');
+    // Add role filter if specified
+    if (validatedQuery.role) {
+      query.filters.roles = validatedQuery.role;
+    }
 
-    // Apply pagination
-    const startAt = (page - 1) * limit;
-    query = query.limit(limit).offset(startAt);
+    // Get users with pagination
+    const { users, pagination } = await UserService.listUsers(
+      query.pageSize,
+      query.filters,
+      validatedQuery.pageToken
+    );
 
-    // Execute query
-    const snapshot = await query.get();
-    
-    // Transform data
-    const users = snapshot.docs.map(doc => {
-      const userData = doc.data();
-      return {
-        uid: doc.id,
-        email: userData.email,
-        displayName: userData.displayName,
-        roles: userData.roles,
-        phoneNumber: userData.phoneNumber,
-        subscriptionStatus: userData.subscriptionStatus,
-        lastLogin: userData.lastLogin,
-        // Exclude sensitive information
-        // Add any other fields you want to expose
-      };
-    });
-
-    // Get total count for pagination
-    const totalSnapshot = await db.collection('users').count().get();
-    const total = totalSnapshot.data().count;
+    // Sanitize user data based on requester's role
+    const sanitizedUsers = users.map(userData => 
+      UserService.sanitizeUserData(userData, user)
+    );
 
     return NextResponse.json({
-      users,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-      filters: {
-        role,
-        sortBy,
-        order,
-      }
+      users: sanitizedUsers,
+      pagination: user.roles.includes('admin') ? pagination : undefined
     });
+
   } catch (error) {
-    console.error('Users API error:', error);
+    console.error('User listing error:', error);
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({
+        error: 'Invalid query parameters',
+        details: error.errors
+      }, { status: 400 });
+    }
+
     return NextResponse.json(
       { error: 'Failed to fetch users' },
       { status: 500 }
     );
   }
-} 
+}
+
+export const GET = playerOrAdmin(listHandler); 

@@ -1,0 +1,12 @@
+{
+  "info": {
+    "name": "Game-On API",
+    "description": "API testing workspace for Game-On application"
+  },
+  "collections": [
+    "./collections/user-management.json"
+  ],
+  "environments": [
+    "./environments/local.json"
+  ]
+} 
